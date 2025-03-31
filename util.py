@@ -1,8 +1,24 @@
 from phevaluator import evaluate_cards
+from enum import Enum
 
 suits: list[str] = ["d", "c", "s", "h"]
 ranks: list[str] = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J",
                     "Q", "K", "A"]
+
+
+class PlayerAction(Enum):
+    FOLD = 0
+    CHECK = 1
+    CALL = 2
+    RAISE = 3
+
+
+class Round(Enum):
+    PREFLOP = 0
+    FLOP = 1
+    TURN = 2
+    RIVER = 3
+    SHOWDOWN = 4
 
 
 def get_rank(card: str) -> str:

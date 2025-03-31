@@ -1,0 +1,47 @@
+- [ ] Determine which actions the player can take
+  - Example has: fold, check, call, raise 3 * Big Blind, raise half pot, raise pot, raise 2 * pot, all in
+  - We currently have: fold, check, call, raise
+    - Raise might be difficult to implement with an arbitrary amount, since we may need a discrete space of actions - research whether to hard-code specific values to actions or if we can use arbitrary values (might require more training to prevent it from placing invalid bets)
+      - Composite Action space? -> Tuple(Discrete Action, some kind of range of betting values?)
+        - This could be problematic because the betting range changes over time
+- [ ] Determine what data to include in an "observation"
+  - Example includes:
+    1. Community Data - "Data available to everybody"
+       - Current player position (bool list for all players)
+       - Current game stage (bool list for preflop, flop, turn, river)
+       - Community pot amount
+       - Current round pot
+       - Active players (bool list for all players not folded/run out of money)
+       - Big blind
+       - Small blind
+       - Legal moves (int list for all possible actions)
+    2. Stage Data - Data for each betting round (preflop, flop, turn, river)
+       - Calls (bool list for all players, if they have called)
+       - Raises (bool list for all players, if they have raised)
+       - Min. call at action (int list for all players, min. call / 100*BB - not sure what this does?)
+       - Contribution (int list for all players, player's current contribution to the current round pot)
+       - Stack at action (int list for all players, player stack / 100*BB - not sure what this does?)
+       - Community pot at action (int list for all players, community pot / 100*BB - not sure what this does?)
+    3. Player Data - Data specific to each player
+       - Position
+       - Equity to river alive
+       - Equity to river 2plr
+       - Equity to river 3plr
+       - Stack (bankroll)
+- [ ] Determine what data to include in "info"
+  - Example includes:
+    - All other data in observation (not flattened) + list of legal moves
+- [ ] Reset
+  - Should make the seeding work for drawing cards from the deck
+- [ ] Step
+  - Should progress the game based on an action
+    - To do this, the game should know who is taking the action and advance the game state appropriately
+  - Check if the game is finished
+  - Return appropriate info (check docs for exact values)
+- [ ] Render
+  - Basic Pygame rendering is set up, just need to translate the current game state into an image
+    - This covers `render_mode` "human" and "rgb_array"
+  - Also implement None/"none" and "ansi"
+- [ ] Close
+  - Basic tutorial has info on doing this
+    - Might just be Pygame handling
