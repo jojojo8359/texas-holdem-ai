@@ -1,0 +1,92 @@
+\documentclass{article}
+
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{booktabs}
+\usepackage{hyperref}
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+\usepackage[accepted]{icml2024}
+
+% For theorems and such
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+
+% if you use cleveref..
+\usepackage[capitalize,noabbrev]{cleveref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% Todonotes is useful during development; simply uncomment the next line
+%    and comment out the line below the next line to turn off comments
+%\usepackage[disable,textsize=tiny]{todonotes}
+\usepackage[textsize=tiny]{todonotes}
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{PokerAI}
+
+\begin{document}
+
+\twocolumn[
+\icmltitle{PokerAI: Using Reinforcement Learning for Texas Hold 'Em Agent}
+
+
+\begin{icmlauthorlist}
+\icmlauthor{Joel Keaton}{sch,yyy}
+\icmlauthor{Amitha Thalanki}{sch,yyy}
+\end{icmlauthorlist}
+
+\icmlaffiliation{yyy}{Department of Computer Science}
+\icmlaffiliation{sch}{University of Massachusetts Lowell}
+
+\icmlkeywords{Machine Learning, Poker, ICML}
+
+\vskip 0.3in
+]
+
+\begin{abstract}
+TODO: Abstract
+\end{abstract}
+
+\section{Introduction}
+Texas Hold 'Em is one of the most popular games of poker. It is found at every casino, and most 
+individuals who gamble have at least dabbled in the game. However, Texas Hold 'Em, like every other 
+game at the casino, is high-risk. It is difficult to learn without losing money, even when playing
+online against real people.
+
+This project creates AI agents to play against the human player, allowing people to lean and play poker
+without the risk of losing money. Using reinforcement learning, the AI functions as a human, with
+the risk of bluffing and playing honorably. 
+
+\section{Related Work}
+
+\section{Dataset}
+Due to the fact that this project uses reinforcement learning, there is no dataset used. There are 
+datasets for Texas Hold 'Em games, but this project did not use any.
+
+\section{Methods}
+
+\section{Discussion}
+
+\section{Conclusion}
+
+\section{Bibliography}
+
+\end{document}
