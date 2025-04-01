@@ -6,7 +6,7 @@ import pygame
 import gymnasium as gym
 from gymnasium import spaces
 
-from poker2 import PlayerAction, Round
+from poker2 import PlayerAction, Round, PokerGame
 
 
 class TexasHoldemEnv(gym.Env):
@@ -14,7 +14,7 @@ class TexasHoldemEnv(gym.Env):
 
     def __init__(self, render_mode: Optional[str] = None):
         self.window_size = 512
-        self.action_space = spaces.Discrete(len(PlayerAction))
+        self.action_space = spaces.Discrete(len(PlayerAction) - 2)
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -25,6 +25,8 @@ class TexasHoldemEnv(gym.Env):
     # TODO: Fill in return type
     def reset(self, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None):
         super().reset(seed=seed)
+
+    def step(self, action):
 
     def render(self):
         if self.render_mode == "rgb_array":

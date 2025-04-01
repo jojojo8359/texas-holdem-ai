@@ -11,6 +11,8 @@ class PlayerAction(Enum):
     CHECK = 1
     CALL = 2
     RAISE = 3
+    SMALL_BLIND = 4
+    BIG_BLIND = 5
 
 
 class Round(Enum):
