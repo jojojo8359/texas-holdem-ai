@@ -76,6 +76,8 @@ class PokerGame:
         log.info(f"Dealer drew {num_cards} card{'s' if num_cards > 1 else ''} to table: {self.community_cards}")
 
     def start_new_hand(self) -> None:
+        # TODO: Add player number checking - 2-8 players
+        # TODO: Add dealer tracking
         log.info("Starting new hand...")
         self.round = Round.PREFLOP
         self.community_cards = []
@@ -94,6 +96,7 @@ class PokerGame:
         self.checkers = 0
         self.min_call = 0
         if self.round == Round.PREFLOP:
+            # TODO: Implement different blind bets for 2 players only
             log.info("Starting round: Preflop")
             self.next_player()
             self.process_decision(PlayerAction.SMALL_BLIND)
@@ -124,6 +127,8 @@ class PokerGame:
         self.player_pots = [0] * len(self.players)
 
     def next_player(self):
+        # TODO: Preflop starts with dealer, all other rounds starts with small blind (unless small blind has folded, then big blind)
+        # Assuming players 0, 1, 2, 3: 0 = dealer, 1 = small blind, 2 = big blind
         log.debug("next_player called")
         alive: int = self.active_players.count(True)
         if alive < 2:
@@ -149,7 +154,6 @@ class PokerGame:
             log.info("All players have bet the same amount, moving to next round...")
             self.end_round()
             self.start_round()
-            # TODO: Check that betting leaves off at the right point when ending the round here
             return
 
         while True:
@@ -166,13 +170,13 @@ class PokerGame:
 
     def determine_legal_moves(self):
         self.legal_moves = []
+        self.legal_moves.append(PlayerAction.FOLD)
         if self.player_pots[self.current_player_idx] == max(self.player_pots):
             self.legal_moves.append(PlayerAction.CHECK)
         else:
             self.legal_moves.append(PlayerAction.CALL)
-            self.legal_moves.append(PlayerAction.FOLD)
         if self.current_player:
-            if self.current_player.bankroll >= 3 * self.big_blind - self.player_pots[self.current_player_idx]:
+            if self.current_player.bankroll > 0:
                 self.legal_moves.append(PlayerAction.RAISE)
         else:
             log.error("No current player, cannot determine legal moves!")
@@ -206,7 +210,7 @@ class PokerGame:
                 self.checkers += 1
                 log.info("Player checks: contribution = 0")
             elif action == PlayerAction.RAISE:
-                contribution = min((3 * self.big_blind), self.current_player.bankroll)
+                contribution = min((3 * self.big_blind) + self.min_call, self.current_player.bankroll)
                 log.info(f"Player raises (3BB={3*self.big_blind}): contribution = {contribution}")
             self.current_player.bankroll -= contribution
             self.player_pots[self.current_player_idx] += contribution
