@@ -28,6 +28,13 @@
        - Equity to river 2plr
        - Equity to river 3plr
        - Stack (bankroll)
+  - Player's bankroll
+  - Player's cards
+  - Rank of player's hand
+  - Community cards
+  - Other players' actions from the round so far
+  - Current player pots, active players
+  - Other players' bankrolls
 - [ ] Determine what data to include in "info"
   - Example includes:
     - All other data in observation (not flattened) + list of legal moves
