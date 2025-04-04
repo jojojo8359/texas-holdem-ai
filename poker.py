@@ -23,6 +23,7 @@ class PokerGame:
         self.active_players: list[bool] = []
         self.current_player: Optional[Player] = None
         self.current_player_idx: int = 0
+        self.dealer_idx: int = 0
 
         self.round: Round = Round.PREFLOP
         self.community_pot: int = 0
@@ -32,8 +33,6 @@ class PokerGame:
         self.deck: list[str] = []
         self.community_cards: list[str] = []
 
-        self.folders: list[bool] = []
-        self.raisers: list[bool] = []
         self.checkers: int = 0
         self.min_call: int = 0
 
@@ -67,8 +66,6 @@ class PokerGame:
         player.cards = []
         player.seat = len(self.players)
         self.players.append(player)
-        self.active_players = [True] * len(self.players)
-        self.player_pots = [0] * len(self.players)
         log.debug(f"Player added: {player.name} at seat #{player.seat}, has {player.bankroll} chips in bankroll")
 
     def draw_card(self) -> str:
@@ -78,6 +75,8 @@ class PokerGame:
     def deal_new_cards(self) -> None:
         """Deal two cards to all active players in the game (as a part of the pre-flop round)."""
         for player in self.players:
+            # TODO: Take players who aren't playing into account - if a player has no bankroll left, they can't play and shouldn't be dealt cards
+            # Rather - change direct bankroll check into checking active player list directly
             player.cards = []
             if player.bankroll <= 0:
                 continue
@@ -97,9 +96,23 @@ class PokerGame:
 
         Also handles resetting the game state to prepare for the new hand.
         """
+        if len(self.players) < 2 or len(self.players) > 8:
+            raise RuntimeError(f"Cannot start a hand with {len(self.players)} players - must be between 2 and 8. Use add_player() to add a new player to the game.")
+        # TODO: Implement game over condition
+        # if (game over condition):
+        #     self.done = True
+        #     self.info("Game over!")
+        #     return
         log.info("Starting new hand...")
         self.round = Round.PREFLOP
         self.community_cards = []
+        self.community_pot = 0
+        # Set current player to the dealer - this way, starting preflop round will advance to the person after dealer (small blind)
+        self.current_player_idx = self.dealer_idx
+        self.current_player = self.players[self.current_player_idx]
+        # TODO: Take into account players that have no bankroll -> reconstruct active players list with checking
+        self.active_players = [True] * len(self.players)
+        self.player_pots = [0] * len(self.players)
         self.generate_deck()
         self.deal_new_cards()
         self.start_round()
@@ -114,6 +127,9 @@ class PokerGame:
         log.info(f"Final community pot: {self.community_pot}")
         log.info(f"Final community cards: {self.community_cards}")
         self.showdown()
+        # Move dealer one position
+        # TODO: Take into account players that have no bankroll? -> while loop
+        self.dealer_idx = (self.dealer_idx + 1) % len(self.players)
 
     def start_round(self) -> None:
         """
@@ -124,19 +140,25 @@ class PokerGame:
         self.checkers = 0
         self.min_call = 0
         if self.round == Round.PREFLOP:
-            # TODO: Implement different blind bets for 2 players only
             log.info("Starting round: Preflop")
-            self.next_player()
+            # Only advance past dealer if not playing with 2 players - this way with 2 players the dealer will bet small blind
+            if len(self.players) != 2:
+                self.next_player()
             self.process_decision(PlayerAction.SMALL_BLIND)
             self.next_player()
             self.process_decision(PlayerAction.BIG_BLIND)
-            self.next_player()
+            # Start preflop betting with dealer
+            self.current_player_idx = self.dealer_idx
+            self.current_player = self.players[self.current_player_idx]
         elif self.round in [Round.FLOP, Round.TURN, Round.RIVER]:
             log.info(f"Starting round: {'Flop' if self.round == Round.FLOP else ('Turn' if self.round == Round.TURN else 'River')}")
             if self.round == Round.FLOP:
                 self.deal_cards_to_table(3)
             elif self.round in [Round.TURN, Round.RIVER]:
                 self.deal_cards_to_table(1)
+            # Start other betting rounds with small blind (dealer + 1 position clockwise)
+            # Do this by setting current player to dealer and then advancing one position - this will take into account folded players
+            self.current_player_idx = self.dealer_idx
             self.next_player()
         else:
             log.info("Starting showdown")
@@ -208,8 +230,10 @@ class PokerGame:
 
         # Successful switch
         if not self.current_player:
+            # Round should start with a current player (dealer)
             self.current_player_idx = 0
-            log.info("No current player, set to 0")
+            log.error("No current player - make sure a current player is set before attempting to advance players!")
+            log.error("Moving to player 0...")
         self.current_player = self.players[self.current_player_idx]
         log.info(f"Moved to player {self.current_player_idx}")
 
@@ -269,6 +293,7 @@ class PokerGame:
             self.round_pot += contribution
             if self.player_pots[self.current_player_idx] == max(self.player_pots):
                 self.min_call = self.player_pots[self.current_player_idx]
+            # TODO: Log players' actions in their own history array, clear when a round starts
         else:
             log.error("No current player, cannot process decision!")
 
@@ -280,6 +305,7 @@ class PokerGame:
         """
         if self.current_player:
             # TODO: Make this work in the future once observations and info is actually implemented
+            # Make sure that observe() is called before action to update the set of legal moves!
             self.observe()
             return self.current_player.action(self.legal_moves, None, self.info())
         else:
