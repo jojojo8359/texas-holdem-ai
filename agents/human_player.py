@@ -5,6 +5,7 @@ from agents.player import Player
 from util import PlayerAction
 
 log = logging.getLogger(__name__)
+log.propagate = True
 
 
 class HumanPlayer(Player):

@@ -2,8 +2,6 @@ import logging
 from util import PlayerAction, Round, suits, ranks, rank_hand
 from typing import Optional
 from agents.player import Player
-from agents.random_player import RandomPlayer
-from agents.human_player import HumanPlayer
 
 import numpy as np
 
@@ -71,7 +69,7 @@ class PokerGame:
         self.players.append(player)
         self.active_players = [True] * len(self.players)
         self.player_pots = [0] * len(self.players)
-        log.info(f"Player added: {player.name} at seat #{player.seat}, has {player.bankroll} chips in bankroll")
+        log.debug(f"Player added: {player.name} at seat #{player.seat}, has {player.bankroll} chips in bankroll")
 
     def draw_card(self) -> str:
         """Draw a random card from the game's deck, remove it, and return it."""
@@ -143,7 +141,7 @@ class PokerGame:
         else:
             log.info("Starting showdown")
             return
-        log.info("Betting has started!")
+        log.info(f"Player {self.current_player_idx} will start betting - starting betting round!")
 
     def end_round(self) -> None:
         """
@@ -194,7 +192,7 @@ class PokerGame:
             if not self.active_players[index]:
                 continue
             if pot != max(self.player_pots) or pot == 0:
-                log.info("Not all players have bet the same amount, continuing betting...")
+                log.debug("Not all players have bet the same amount, continuing betting...")
                 cont = False
                 break
         if cont:
@@ -233,11 +231,12 @@ class PokerGame:
     def dump_state(self) -> None:
         """Log the game's current state (at debug level). Useful for providing info before a human player's bet."""
         log.debug(f"Current legal moves: {self.legal_moves}")
-        log.info(f"Active players: {self.active_players}")
-        log.info(f"Player pots: {self.player_pots}")
-        log.info(f"Round pot: {self.round_pot}")
-        log.info(f"Min call: {self.min_call}")
-        log.info(f"Community pot: {self.community_pot}")
+        log.debug(f"Current player: {self.current_player_idx} (dealer = {self.dealer_idx}, sb = {(self.dealer_idx + 1) % len(self.players)}, bb = {(self.dealer_idx + 2) % len(self.players)})")
+        log.debug(f"Active players: {self.active_players}")
+        log.debug(f"Player pots: {self.player_pots}")
+        log.debug(f"Pots: Round = {self.round_pot} | Community = {self.community_pot} | Min Call = {self.min_call}")
+        if self.current_player:
+            log.debug(f"Current player cards: {self.current_player.cards + self.community_cards} | Rank = {rank_hand(self.current_player.cards + self.community_cards) if len(self.current_player.cards + self.community_cards) >= 5 else 'Not enough cards to rank'}")
 
     def process_decision(self, action: PlayerAction) -> None:
         """Process a player's decision by updating the game's state based on the requested player action."""
@@ -310,15 +309,14 @@ class PokerGame:
         if self.round == Round.SHOWDOWN:
             self.end_hand()
             self.start_new_hand()
-            return False
-        return True
 
     def showdown(self) -> None:
         """Determine the winner of the current round and award them the proper win total."""
         # TODO: Change to handle ties
         winner: int = self.determine_winner()
         log.info(f"Player {winner} wins!")
-        self.award_winner(winner)
+        self.players[winner].bankroll += self.community_pot
+        log.info(f"Winner wins {self.community_pot}, and now has {self.players[winner].bankroll}")
 
     def determine_winner(self) -> int:
         """Determine the winner of the current round."""
@@ -333,21 +331,3 @@ class PokerGame:
                 ranks[index] = 7463
         # TODO: Check for ties, change return type to tuple/list
         return ranks.index(min(ranks))
-
-    def award_winner(self, winner_index: int) -> None:
-        self.players[winner_index].bankroll += self.community_pot
-        log.info(f"Winner wins {self.community_pot}, and now has {self.players[winner_index].bankroll}")
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(name)s:%(funcName)s: %(message)s")
-    game = PokerGame(1000, 5, 10)
-    # game.add_players([RandomPlayer() for _ in range(4)])
-    # game.add_players([RandomPlayer(), RandomPlayer(), HumanPlayer(), RandomPlayer()])
-    game.add_players([HumanPlayer() for _ in range(4)])
-    game.start_new_hand()
-    cont: bool = True
-    while cont is True:
-        action: Optional[PlayerAction] = game.action()
-        if action is not None:
-            cont = game.step(action)

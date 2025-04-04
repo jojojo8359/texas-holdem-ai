@@ -1,3 +1,4 @@
+import logging
 from phevaluator import evaluate_cards
 from enum import Enum
 
