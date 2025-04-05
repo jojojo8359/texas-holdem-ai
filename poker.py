@@ -24,6 +24,8 @@ class PokerGame:
         self.current_player: Optional[Player] = None
         self.current_player_idx: int = 0
         self.dealer_idx: int = 0
+        self.small_blind_idx: int = 0
+        self.big_blind_idx: int = 0
 
         self.round: Round = Round.PREFLOP
         self.community_pot: int = 0
@@ -74,11 +76,10 @@ class PokerGame:
 
     def deal_new_cards(self) -> None:
         """Deal two cards to all active players in the game (as a part of the pre-flop round)."""
-        for player in self.players:
-            # TODO: Take players who aren't playing into account - if a player has no bankroll left, they can't play and shouldn't be dealt cards
-            # Rather - change direct bankroll check into checking active player list directly
+        for index, player in enumerate(self.players):
             player.cards = []
-            if player.bankroll <= 0:
+            if not self.active_players[index]:
+                log.info(f"Player {player.seat} is not playing this round.")
                 continue
             for _ in range(2):
                 player.cards.append(self.draw_card())
@@ -110,8 +111,10 @@ class PokerGame:
         # Set current player to the dealer - this way, starting preflop round will advance to the person after dealer (small blind)
         self.current_player_idx = self.dealer_idx
         self.current_player = self.players[self.current_player_idx]
-        # TODO: Take into account players that have no bankroll -> reconstruct active players list with checking
-        self.active_players = [True] * len(self.players)
+        # Reconstruct active players list based on each player's bankroll after the last round
+        self.active_players = [True if player.bankroll > 0 else False for player in self.players]
+        for player in self.players:
+            player.actions = []
         self.player_pots = [0] * len(self.players)
         self.generate_deck()
         self.deal_new_cards()
@@ -127,9 +130,11 @@ class PokerGame:
         log.info(f"Final community pot: {self.community_pot}")
         log.info(f"Final community cards: {self.community_cards}")
         self.showdown()
-        # Move dealer one position
-        # TODO: Take into account players that have no bankroll? -> while loop
-        self.dealer_idx = (self.dealer_idx + 1) % len(self.players)
+        # Move dealer one position, but take into account players that have no bankroll
+        while True:
+            self.dealer_idx = (self.dealer_idx + 1) % len(self.players)
+            if self.players[self.dealer_idx].bankroll > 0:
+                break
 
     def start_round(self) -> None:
         """
@@ -145,8 +150,10 @@ class PokerGame:
             if len(self.players) != 2:
                 self.next_player()
             self.process_decision(PlayerAction.SMALL_BLIND)
+            self.small_blind_idx = self.current_player_idx
             self.next_player()
             self.process_decision(PlayerAction.BIG_BLIND)
+            self.big_blind_idx = self.current_player_idx
             # Start preflop betting with dealer
             self.current_player_idx = self.dealer_idx
             self.current_player = self.players[self.current_player_idx]
@@ -209,6 +216,7 @@ class PokerGame:
             self.start_round()
             return
 
+        # TODO: Add edge case handling for when a player bets the last of their bankroll but can't call to the same amount
         cont: bool = True
         for index, pot in enumerate(self.player_pots):
             if not self.active_players[index]:
@@ -255,12 +263,13 @@ class PokerGame:
     def dump_state(self) -> None:
         """Log the game's current state (at debug level). Useful for providing info before a human player's bet."""
         log.debug(f"Current legal moves: {self.legal_moves}")
-        log.debug(f"Current player: {self.current_player_idx} (dealer = {self.dealer_idx}, sb = {(self.dealer_idx + 1) % len(self.players)}, bb = {(self.dealer_idx + 2) % len(self.players)})")
+        log.debug(f"Current player: {self.current_player_idx} (dealer = {self.dealer_idx}, sb = {self.small_blind_idx}, bb = {self.big_blind_idx})")
         log.debug(f"Active players: {self.active_players}")
         log.debug(f"Player pots: {self.player_pots}")
+        log.debug(f"Player bankrolls: {[player.bankroll for player in self.players]}")
         log.debug(f"Pots: Round = {self.round_pot} | Community = {self.community_pot} | Min Call = {self.min_call}")
         if self.current_player:
-            log.debug(f"Current player cards: {self.current_player.cards + self.community_cards} | Rank = {rank_hand(self.current_player.cards + self.community_cards) if len(self.current_player.cards + self.community_cards) >= 5 else 'Not enough cards to rank'}")
+            log.debug(f"Current player cards: {self.current_player.cards + self.community_cards} | Rank = {rank_hand(self.current_player.cards + self.community_cards) if len(self.current_player.cards + self.community_cards) >= 5 else 'Not enough cards to rank'} | Bankroll = {self.current_player.bankroll}")
 
     def process_decision(self, action: PlayerAction) -> None:
         """Process a player's decision by updating the game's state based on the requested player action."""
@@ -270,6 +279,7 @@ class PokerGame:
         contribution: int = 0
         # Check against action and set contribution accordingly
         if self.current_player:
+            self.current_player.actions.append(action)
             if action == PlayerAction.SMALL_BLIND:
                 contribution = min(self.small_blind, self.current_player.bankroll)
                 log.info(f"Player bet small blind ({self.small_blind}): contribution = {contribution}")
@@ -289,11 +299,11 @@ class PokerGame:
                 contribution = min((3 * self.big_blind) + self.min_call, self.current_player.bankroll)
                 log.info(f"Player raises (3BB={3*self.big_blind}): contribution = {contribution}")
             self.current_player.bankroll -= contribution
+            log.info(f"Player's bankroll is now at {self.current_player.bankroll}")
             self.player_pots[self.current_player_idx] += contribution
             self.round_pot += contribution
             if self.player_pots[self.current_player_idx] == max(self.player_pots):
                 self.min_call = self.player_pots[self.current_player_idx]
-            # TODO: Log players' actions in their own history array, clear when a round starts
         else:
             log.error("No current player, cannot process decision!")
 
@@ -338,14 +348,14 @@ class PokerGame:
 
     def showdown(self) -> None:
         """Determine the winner of the current round and award them the proper win total."""
-        # TODO: Change to handle ties
-        winner: int = self.determine_winner()
-        log.info(f"Player {winner} wins!")
-        self.players[winner].bankroll += self.community_pot
-        log.info(f"Winner wins {self.community_pot}, and now has {self.players[winner].bankroll}")
+        winners: list[int] = self.determine_winners()
+        log.info(f"Player(s) {winners} win(s)!")
+        for winner in winners:
+            self.players[winner].bankroll += (self.community_pot // len(winners))
+            log.info(f"Player {winner} wins {self.community_pot // len(winners)}, and now has {self.players[winner].bankroll}")
 
-    def determine_winner(self) -> int:
-        """Determine the winner of the current round."""
+    def determine_winners(self) -> list[int]:
+        """Determine the winner(s) of the current round."""
         ranks: list[int] = [0] * len(self.players)
         for index, player in enumerate(self.players):
             if self.active_players[index]:
@@ -355,5 +365,4 @@ class PokerGame:
                 ranks[index] = rank_hand(all_cards)[1]
             else:
                 ranks[index] = 7463
-        # TODO: Check for ties, change return type to tuple/list
-        return ranks.index(min(ranks))
+        return [i for i, x in enumerate(ranks) if x == min(ranks)]
