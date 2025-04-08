@@ -48,27 +48,18 @@ class PokerGame:
         """
         self.rng = gen
 
+    def reset(self):
+        for player in self.players:
+            player.actions = []
+            player.bankroll = self.initial_bankroll
+            player.round_contribution = 0
+            player.cards = []
+        self.done = False
+        self.start_new_hand()
+
     def generate_deck(self) -> None:
         """Reset the game's deck to having all 52 cards."""
         self.deck = [rank + suit for suit in suits for rank in ranks]
-
-    def add_players(self, players: list[Player]) -> None:
-        """Add a list of players to the game. Players should be `Player` sub-classes."""
-        for player in players:
-            self.add_player(player)
-
-    def add_player(self, player: Player) -> None:
-        """
-        Add a "Player" sub-class to the game.
-
-        The player instance will have all of its internal attributes initialized.
-        """
-        player.bankroll = self.initial_bankroll
-        player.actions = []
-        player.cards = []
-        player.seat = len(self.players)
-        self.players.append(player)
-        log.debug(f"Player added: {player.name} at seat #{player.seat}, has {player.bankroll} chips in bankroll")
 
     def draw_card(self) -> str:
         """Draw a random card from the game's deck, remove it, and return it."""
@@ -99,11 +90,10 @@ class PokerGame:
         """
         if len(self.players) < 2 or len(self.players) > 8:
             raise RuntimeError(f"Cannot start a hand with {len(self.players)} players - must be between 2 and 8. Use add_player() to add a new player to the game.")
-        # TODO: Implement game over condition
-        # if (game over condition):
-        #     self.done = True
-        #     self.info("Game over!")
-        #     return
+        if [player.bankroll for player in self.players].count(0) == len(self.players) - 1:
+            self.done = True
+            log.info("Game over!")
+            return
         log.info("Starting new hand...")
         self.round = Round.PREFLOP
         self.community_cards = []
@@ -115,6 +105,7 @@ class PokerGame:
         self.active_players = [True if player.bankroll > 0 else False for player in self.players]
         for player in self.players:
             player.actions = []
+            player.round_contribution = 0
         self.player_pots = [0] * len(self.players)
         self.generate_deck()
         self.deal_new_cards()
@@ -122,7 +113,7 @@ class PokerGame:
 
     def end_hand(self) -> None:
         """
-        End the current hand of Texas Hold'em. Includes the showdown round..
+        End the current hand of Texas Hold'em. Includes the showdown round.
 
         Determines the winner of the current hand and manages pots and bankrolls accordingly.
         """
@@ -194,6 +185,8 @@ class PokerGame:
         self.community_pot += self.round_pot
         self.round_pot = 0
         self.player_pots = [0] * len(self.players)
+        for player in self.players:
+            player.round_contribution = 0
 
     def next_player(self) -> None:
         """
@@ -216,7 +209,6 @@ class PokerGame:
             self.start_round()
             return
 
-        # TODO: Add edge case handling for when a player bets the last of their bankroll but can't call to the same amount
         cont: bool = True
         for index, pot in enumerate(self.player_pots):
             if not self.active_players[index]:
@@ -252,13 +244,13 @@ class PokerGame:
         if self.player_pots[self.current_player_idx] == max(self.player_pots):
             self.legal_moves.append(PlayerAction.CHECK)
         else:
-            self.legal_moves.append(PlayerAction.CALL)
+            if self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]:
+                self.legal_moves.append(PlayerAction.CALL)
         if self.current_player:
             if self.current_player.bankroll > 0:
                 self.legal_moves.append(PlayerAction.RAISE)
         else:
             log.error("No current player, cannot determine legal moves!")
-        self.dump_state()
 
     def dump_state(self) -> None:
         """Log the game's current state (at debug level). Useful for providing info before a human player's bet."""
@@ -299,6 +291,7 @@ class PokerGame:
                 contribution = min((3 * self.big_blind) + self.min_call, self.current_player.bankroll)
                 log.info(f"Player raises (3BB={3*self.big_blind}): contribution = {contribution}")
             self.current_player.bankroll -= contribution
+            self.current_player.round_contribution += contribution
             log.info(f"Player's bankroll is now at {self.current_player.bankroll}")
             self.player_pots[self.current_player_idx] += contribution
             self.round_pot += contribution
@@ -307,7 +300,7 @@ class PokerGame:
         else:
             log.error("No current player, cannot process decision!")
 
-    def action(self) -> Optional[PlayerAction]:
+    def action(self, observation, info) -> Optional[PlayerAction]:
         """
         Request the current player to make a decision given the current set of legal actions, an observation of the game state, and additional info.
 
@@ -316,30 +309,20 @@ class PokerGame:
         if self.current_player:
             # TODO: Make this work in the future once observations and info is actually implemented
             # Make sure that observe() is called before action to update the set of legal moves!
-            self.observe()
-            return self.current_player.action(self.legal_moves, None, self.info())
+            self.determine_legal_moves()
+            return self.current_player.action(self.legal_moves, observation, info)
         else:
             log.error("No current player, cannot take an action!")
             return None
-
-    def observe(self) -> None:
-        # TODO: Return something useful
-        self.determine_legal_moves()
-
-    def info(self) -> None:
-        # TODO: Return something useful
-        pass
 
     def deactivate_current_player(self) -> None:
         """Set the current player to be inactive in the current round."""
         self.active_players[self.current_player_idx] = False
         log.info(f"Player {self.current_player_idx} is now inactive")
 
-    def step(self, action: Optional[PlayerAction]) -> None:
-        """Advance the game by one step given an action for the current player to take."""
+    def do_step(self, action: Optional[PlayerAction]) -> None:
         if action is None:
-            log.error("Cannot step game with action None!")
-            raise ValueError("action should not be None")
+            raise RuntimeError("Cannot step game with action None")
         self.process_decision(action)
         self.next_player()
         if self.round == Round.SHOWDOWN:
@@ -357,6 +340,12 @@ class PokerGame:
     def determine_winners(self) -> list[int]:
         """Determine the winner(s) of the current round."""
         ranks: list[int] = [0] * len(self.players)
+        # If the flop hasn't happened, then split the current pot between all active players
+        if len(self.community_cards) < 3:
+            if self.active_players.count(True) == 1:
+                return [self.active_players.index(True)]
+            else:
+                raise RuntimeError("Cannot determine a winner from preflop with more than 1 active player!")
         for index, player in enumerate(self.players):
             if self.active_players[index]:
                 log.info(f"Player {index}'s cards: {player.cards}")

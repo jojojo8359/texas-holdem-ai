@@ -10,7 +10,7 @@ log.propagate = True
 
 class HumanPlayer(Player):
     def __init__(self):
-        super().__init__("Human Agent")
+        super().__init__("Human Agent", True)
 
     def action(self, action_space: list[PlayerAction], observation, info) -> PlayerAction:
         log.info(f"Action space: {action_space}")

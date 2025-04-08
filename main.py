@@ -1,26 +1,21 @@
-from poker import PokerGame
 import logging
-from util import PlayerAction, ColoredFormatter
-from typing import Optional
-# from agents.random_player import RandomPlayer
-from agents.human_player import HumanPlayer
+import time
+import gymnasium as gym
+from util import ColoredFormatter
+from agents.random_player import RandomPlayer
+# from agents.human_player import HumanPlayer
+from gym_env.env import TexasHoldemEnv  # noqa: F401
 
 
 if __name__ == "__main__":
     log = logging.getLogger()
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.WARNING)
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.WARNING)
     ch.setFormatter(ColoredFormatter())
     log.addHandler(ch)
-    # logging.basicConfig(level=logging.DEBUG, format="%(levelname)s:%(name)s:%(funcName)s: %(message)s")
 
-    game = PokerGame(1000, 5, 10)
-    # game.add_players([RandomPlayer() for _ in range(4)])
-    # game.add_players([RandomPlayer(), RandomPlayer(), HumanPlayer(), RandomPlayer()])
-    game.add_players([HumanPlayer() for _ in range(4)])
-    game.start_new_hand()
-    while not game.done:
-        action: Optional[PlayerAction] = game.action()
-        if action is not None:
-            game.step(action)
+    env = gym.make('TexasHoldem-v0', render_mode="human", initial_bankroll=100, small_blind=2, big_blind=5, players=[RandomPlayer() for _ in range(8)])
+    env.reset()
+    env.step(None)
+    time.sleep(5)
