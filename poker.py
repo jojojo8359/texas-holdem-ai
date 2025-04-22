@@ -20,6 +20,7 @@ class PokerGame:
         self.players: list[Player] = []
 
         self.done: bool = False
+        self.winner: Optional[int] = None
         self.active_players: list[bool] = []
         self.current_player: Optional[Player] = None
         self.current_player_idx: int = 0
@@ -55,6 +56,7 @@ class PokerGame:
             player.round_contribution = 0
             player.cards = []
         self.done = False
+        self.winner = None
         self.start_new_hand()
 
     def generate_deck(self) -> None:
@@ -92,6 +94,13 @@ class PokerGame:
             raise RuntimeError(f"Cannot start a hand with {len(self.players)} players - must be between 2 and 8. Use add_player() to add a new player to the game.")
         if [player.bankroll for player in self.players].count(0) == len(self.players) - 1:
             self.done = True
+            self.winner = None
+            for index, bankroll in enumerate(player.bankroll for player in self.players):
+                if bankroll != 0:
+                    self.winner = index
+                    break
+            if self.winner is None:
+                logging.error("No winner found")
             log.info("Game over!")
             return
         log.info("Starting new hand...")
