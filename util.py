@@ -33,11 +33,10 @@ ranks: list[str] = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J",
 
 class PlayerAction(Enum):
     FOLD = 0
-    CHECK = 1
-    CALL = 2
-    RAISE = 3
-    SMALL_BLIND = 4
-    BIG_BLIND = 5
+    CHECK_CALL = 1
+    RAISE = 2
+    SMALL_BLIND = 3
+    BIG_BLIND = 4
 
 
 class Round(Enum):
@@ -74,31 +73,42 @@ def get_rank_int(card: str) -> int:
 # TODO: Write card pretty conversions
 
 
-def rank_hand(hand: list[str]) -> tuple[str, int]:
+def rank_hand(hand: list[str]) -> tuple[str, int, int]:
     r: int = evaluate_cards(*hand)
     rank = "Unknown Rank"
+    rank_index = 0
     if r == 1:
         rank = "Royal Flush"
+        rank_index = 10
     elif r <= 10:
         rank = "Straight Flush"
+        rank_index = 9
     elif r <= 10 + 156:
         rank = "Four of a Kind"
+        rank_index = 8
     elif r <= 10 + 156 + 156:
         rank = "Full House"
+        rank_index = 7
     elif r <= 10 + 156 + 156 + 1277:
         rank = "Flush"
+        rank_index = 6
     elif r <= 10 + 156 + 156 + 1277 + 10:
         rank = "Straight"
+        rank_index = 5
     elif r <= 10 + 156 + 156 + 1277 + 10 + 858:
         rank = "Three of a Kind"
+        rank_index = 4
     elif r <= 10 + 156 + 156 + 1277 + 10 + 858 + 858:
         rank = "Two Pair"
+        rank_index = 3
     elif r <= 10 + 156 + 156 + 1277 + 10 + 858 + 858 + 2860:
         rank = "One Pair"
+        rank_index = 2
     elif r <= 10 + 156 + 156 + 1277 + 10 + 858 + 858 + 2860 + 1277:
         rank = "High Card"
+        rank_index = 1
     else:
         pass
-    return (rank, r)
+    return (rank, r, rank_index)
 
 # TODO: Write Monte-Carlo equity simulation

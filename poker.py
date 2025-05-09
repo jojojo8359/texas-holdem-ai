@@ -101,12 +101,13 @@ class PokerGame:
                     break
             if self.winner is None:
                 logging.error("No winner found")
-            log.info("Game over!")
+            log.info(f"Game over! Player {self.winner} won")
             return
         log.info("Starting new hand...")
         self.round = Round.PREFLOP
         self.community_cards = []
         self.community_pot = 0
+        self.round_pot = 0
         # Set current player to the dealer - this way, starting preflop round will advance to the person after dealer (small blind)
         self.current_player_idx = self.dealer_idx
         self.current_player = self.players[self.current_player_idx]
@@ -250,11 +251,8 @@ class PokerGame:
         """Update the set of legal moves for the current player given the game's state."""
         self.legal_moves = []
         self.legal_moves.append(PlayerAction.FOLD)
-        if self.player_pots[self.current_player_idx] == max(self.player_pots):
-            self.legal_moves.append(PlayerAction.CHECK)
-        else:
-            if self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]:
-                self.legal_moves.append(PlayerAction.CALL)
+        if self.player_pots[self.current_player_idx] == max(self.player_pots) or (self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]):
+            self.legal_moves.append(PlayerAction.CHECK_CALL)
         if self.current_player:
             if self.current_player.bankroll > 0:
                 self.legal_moves.append(PlayerAction.RAISE)
@@ -290,12 +288,15 @@ class PokerGame:
             elif action == PlayerAction.FOLD:
                 self.deactivate_current_player()
                 log.info("Player folds")
-            elif action == PlayerAction.CALL:
-                contribution = min(self.min_call - self.player_pots[self.current_player_idx], self.current_player.bankroll)
-                log.info(f"Player calls ({self.min_call}): contribution = {contribution}")
-            elif action == PlayerAction.CHECK:
-                self.checkers += 1
-                log.info("Player checks: contribution = 0")
+            elif action == PlayerAction.CHECK_CALL:
+                if self.player_pots[self.current_player_idx] == max(self.player_pots):
+                    # CHECK
+                    self.checkers += 1
+                    log.info("Player checks: contribution = 0")
+                elif self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]:
+                    # CALL
+                    contribution = min(self.min_call - self.player_pots[self.current_player_idx], self.current_player.bankroll)
+                    log.info(f"Player calls ({self.min_call}): contribution = {contribution}")
             elif action == PlayerAction.RAISE:
                 contribution = min((3 * self.big_blind) + self.min_call, self.current_player.bankroll)
                 log.info(f"Player raises (3BB={3*self.big_blind}): contribution = {contribution}")

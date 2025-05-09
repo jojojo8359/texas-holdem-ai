@@ -26,13 +26,13 @@ if __name__ == "__main__":
     action_size = env.action_space.n  # type: ignore
     qtable = defaultdict(lambda: np.zeros(action_size))
 
-    learning_rate = 0.9
-    discount_rate = 0.8
+    learning_rate = 0.1
+    discount_rate = 0.5
     epsilon = 0.5
     decay_rate = 0.005
 
-    num_episodes = 1000
-    max_steps = 99
+    num_episodes = 3000
+    max_steps = 200
 
     episodes_won = 0
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
         log.error("Starting episode " + str(episode))
         for s in range(max_steps):
             if random.uniform(0, 1) < epsilon:
-                action = env.action_space.sample()
+                action = random.choice(info['legal_moves']).value
             else:
                 action = np.argmax(qtable[state])  # type: ignore
 
@@ -70,26 +70,42 @@ if __name__ == "__main__":
 
     # env = gym.make('TexasHoldem-v0', render_mode="human", initial_bankroll=100, small_blind=2, big_blind=5, players=[QPlayer(), RandomPlayer(), RandomPlayer(), RandomPlayer()])
 
-    state, info = env.reset()
-    done = False
-    rewards = 0
+    # state, info = env.reset()
+    # done = False
+    # rewards = 0
 
     log.error("Trained agent is now playing...")
 
-    for s in range(max_steps):
-        if state in qtable:
-            action = np.argmax(qtable[state])
-        else:
-            action = env.action_space.sample()
-        log.error(f"Legal moves are {info['legal_moves']}")
-        log.error("Chosen action is " + str(PlayerAction(action)))
-        new_state, reward, done, truncated, info = env.step(PlayerAction(action))
-        env.render()
-        rewards += float(reward)
-        log.error(f"Current reward: {rewards}")
-        state = new_state
-        if done or truncated:
-            break
+    # trained_episodes = 2000
+    episodes_won = 0
+
+    for episode in range(num_episodes):
+        state, info = env.reset()
+        done = False
+        rewards = 0
+
+        for s in range(max_steps):
+            if state in qtable:
+                action = np.argmax(qtable[state])
+                if PlayerAction(action) not in info['legal_moves']:
+                    new_action = random.choice(info['legal_moves']).value
+                    # log.error(f"Q-value {PlayerAction(action)} not legal for round, choosing {PlayerAction(new_action)} instead...")
+                    action = new_action
+            else:
+                action = random.choice(info['legal_moves']).value
+            # log.error(f"Legal moves are {info['legal_moves']}")
+            # log.error("Chosen action is " + str(PlayerAction(action)))
+            new_state, reward, done, truncated, info = env.step(PlayerAction(action))
+            # env.render()
+            rewards += float(reward)
+            # log.error(f"Current reward: {rewards}")
+            state = new_state
+            if done or truncated:
+                if float(reward) > 0.0:
+                    episodes_won += 1
+                break
+    log.error("Playing finished!")
+    log.error(f"Agent won: {episodes_won}/{num_episodes} episodes")
 
     time.sleep(5)
     env.close()

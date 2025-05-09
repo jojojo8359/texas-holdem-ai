@@ -28,12 +28,12 @@ class TexasHoldemEnv(gym.Env):
             (
                 spaces.Discrete(1, start=len(self.game.players)),  # number of players
                 spaces.Discrete(len(self.game.players), start=0),  # current player
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # current player bankroll
-                spaces.Discrete(7463, start=1),  # current hand rank
+                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player bankroll
+                spaces.Discrete(10),  # current hand rank
                 spaces.Discrete(len(Round)),  # current round
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # current player pot
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # round pot
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # community pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # round pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # community pot
             )
         )
         self.observation = {}
@@ -84,12 +84,12 @@ class TexasHoldemEnv(gym.Env):
         self.observation = (
             len(self.game.players),  # number of players
             self.game.current_player_idx,  # current player
-            self.game.current_player.bankroll if self.game.current_player else 0,  # current player bankroll
-            rank_hand((self.game.current_player.cards if self.game.current_player else []) + self.game.community_cards)[1] if len(self.game.community_cards) >= 3 else 7463,  # current hand rank
+            self.game.current_player.bankroll // (len(self.game.players) * self.game.initial_bankroll // 10) if self.game.current_player else 0,  # current player bankroll
+            rank_hand((self.game.current_player.cards if self.game.current_player else []) + self.game.community_cards)[2] if len(self.game.community_cards) >= 3 else 0,  # current hand rank
             self.game.round.value,  # current round
-            self.game.player_pots[self.game.current_player_idx],  # current player pot
-            self.game.round_pot,  # round pot
-            self.game.community_pot  # community pot
+            # self.game.player_pots[self.game.current_player_idx] // (len(self.game.players) * self.game.initial_bankroll // 10),  # current player pot
+            # self.game.round_pot // (len(self.game.players) * self.game.initial_bankroll // 10),  # round pot
+            # self.game.community_pot // (len(self.game.players) * self.game.initial_bankroll // 10)  # community pot
         )
         # self.observation["table_cards"] = np.array((self.observation["table_cards"] + 5 * [-1])[:5])
         self.game.dump_state()
@@ -120,12 +120,12 @@ class TexasHoldemEnv(gym.Env):
             (
                 spaces.Discrete(1, start=len(self.game.players)),  # number of players
                 spaces.Discrete(len(self.game.players), start=0),  # current player
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # current player bankroll
-                spaces.Discrete(7463, start=1),  # current hand rank
+                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player bankroll
+                spaces.Discrete(10),  # current hand rank
                 spaces.Discrete(len(Round)),  # current round
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # current player pot
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # round pot
-                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll),  # community pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # round pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # community pot
             )
         )
 
@@ -144,6 +144,8 @@ class TexasHoldemEnv(gym.Env):
                 if action not in self.game.legal_moves:
                     self.reward = -10.0
                     continue
+                if action == PlayerAction.FOLD:
+                    self.reward = -5.0
                 self.game.do_step(action)
                 self._get_obs()
         else:
@@ -151,6 +153,8 @@ class TexasHoldemEnv(gym.Env):
                 if action not in self.game.legal_moves:
                     self.reward = -10.0
                     return (self.observation, self.reward, self.game.done, False, self._get_info())
+                if action == PlayerAction.FOLD:
+                    self.reward = -5.0
                 self.game.do_step(action)
                 self._get_obs()
                 while self.game.current_player.autoplay and not self.game.done:
@@ -225,7 +229,7 @@ class TexasHoldemEnv(gym.Env):
 
     def _calc_reward(self):
         if self.game.done:
-            if self.game.winner and not self.game.players[self.game.winner].autoplay:
+            if self.game.winner is not None and not self.game.players[self.game.winner].autoplay:
                 self.reward = self.game.initial_bankroll * len(self.game.players)
             else:
                 self.reward = -(self.game.initial_bankroll * len(self.game.players))
