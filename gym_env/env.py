@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 class TexasHoldemEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 5}
 
     def __init__(self, initial_bankroll: int, small_blind: int, big_blind: int, players: list[Player], render_mode: Optional[str] = None):
         self.game = PokerGame(initial_bankroll, small_blind, big_blind)
@@ -24,24 +24,20 @@ class TexasHoldemEnv(gym.Env):
         self.master_deck = [rank + suit for suit in suits for rank in ranks]
         self.window_size = (768, 512)
         self.action_space = spaces.Discrete(len(PlayerAction) - 2)
-        self.observation_space = spaces.Dict(
-            {
-                "num_players": spaces.Discrete(1, start=len(self.game.players)),
-                "current_player": spaces.Discrete(len(self.game.players), start=0),
-                "bankrolls": spaces.Box(low=0, high=2**63 - 2, shape=(len(self.game.players),), dtype=np.int64),
-                "player_cards": spaces.Box(low=0, high=51, shape=(2,), dtype=np.int64),
-                "table_cards": spaces.Box(low=-1, high=51, shape=(5,), dtype=np.int64),
-                "current_hand_rank": spaces.Discrete(7463, start=1),
-                "player_pots": spaces.Box(low=0, high=2**63 - 2, shape=(len(self.game.players),), dtype=np.int64),
-                "active_players": spaces.Box(low=0, high=1, shape=(len(self.game.players),), dtype=np.int64),
-                "round_contributions": spaces.Box(low=0, high=2**63 - 2, shape=(len(self.game.players),), dtype=np.int64),
-                "round_pot": spaces.Box(low=0, high=2**63 - 2, shape=(1,), dtype=np.int64),
-                "community_pot": spaces.Box(low=0, high=2**63 - 2, shape=(1,), dtype=np.int64),
-                "round": spaces.Discrete(len(Round)),
-                "legal_moves": spaces.Box(low=0, high=1, shape=(len(PlayerAction) - 2,), dtype=np.int64)
-            }
+        self.observation_space = spaces.Tuple(
+            (
+                spaces.Discrete(1, start=len(self.game.players)),  # number of players
+                spaces.Discrete(len(self.game.players), start=0),  # current player
+                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player bankroll
+                spaces.Discrete(10),  # current hand rank
+                spaces.Discrete(len(Round)),  # current round
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # round pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # community pot
+            )
         )
         self.observation = {}
+        self.reward = 0.0
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
@@ -85,28 +81,23 @@ class TexasHoldemEnv(gym.Env):
 
     def _get_obs(self) -> None:
         self.game.determine_legal_moves()
-        self.observation = {
-            "num_players": len(self.game.players),
-            "current_player": self.game.current_player_idx,
-            "bankrolls": np.array([player.bankroll for player in self.game.players]),
-            "player_cards": np.array([self.master_deck.index(card) for card in (self.game.current_player.cards if self.game.current_player else [])]),
-            "table_cards": [self.master_deck.index(card) for card in self.game.community_cards],
-            "current_hand_rank": rank_hand((self.game.current_player.cards if self.game.current_player else []) + self.game.community_cards)[1] if len(self.game.community_cards) >= 3 else 7463,
-            "player_pots": np.array(self.game.player_pots),
-            "active_players": np.array([int(player) for player in self.game.active_players]),
-            "round_contributions": np.array([player.round_contribution for player in self.game.players]),
-            "round_pot": np.array([self.game.round_pot]),
-            "community_pot": np.array([self.game.community_pot]),
-            "round": self.game.round.value,
-            "legal_moves": np.array([1 if PlayerAction(i) in self.game.legal_moves else 0 for i in range(len(PlayerAction) - 2)])
-        }
-        self.observation["table_cards"] = np.array((self.observation["table_cards"] + 5 * [-1])[:5])
+        self.observation = (
+            len(self.game.players),  # number of players
+            self.game.current_player_idx,  # current player
+            self.game.current_player.bankroll // (len(self.game.players) * self.game.initial_bankroll // 10) if self.game.current_player else 0,  # current player bankroll
+            rank_hand((self.game.current_player.cards if self.game.current_player else []) + self.game.community_cards)[2] if len(self.game.community_cards) >= 3 else 0,  # current hand rank
+            self.game.round.value,  # current round
+            # self.game.player_pots[self.game.current_player_idx] // (len(self.game.players) * self.game.initial_bankroll // 10),  # current player pot
+            # self.game.round_pot // (len(self.game.players) * self.game.initial_bankroll // 10),  # round pot
+            # self.game.community_pot // (len(self.game.players) * self.game.initial_bankroll // 10)  # community pot
+        )
+        # self.observation["table_cards"] = np.array((self.observation["table_cards"] + 5 * [-1])[:5])
         self.game.dump_state()
         log.debug(f"Observation: {self.observation}")
-        self.render()
+        # self.render()
 
     def _get_info(self) -> dict:
-        return {}
+        return {'legal_moves': self.game.legal_moves}
 
     def add_players(self, players: list[Player]) -> None:
         """Add a list of players to the game. Players should be `Player` sub-classes."""
@@ -125,22 +116,17 @@ class TexasHoldemEnv(gym.Env):
         player.seat = len(self.game.players)
         self.game.players.append(player)
         log.debug(f"Player added: {player.name} at seat #{player.seat}, has {player.bankroll} chips in bankroll")
-        self.observation_space = spaces.Dict(
-            {
-                "num_players": spaces.Discrete(1, start=len(self.game.players)),
-                "current_player": spaces.Discrete(len(self.game.players), start=0),
-                "bankrolls": spaces.Box(low=0, high=2**63 - 2, shape=(len(self.game.players),), dtype=np.int64),
-                "player_cards": spaces.Box(low=0, high=51, shape=(2,), dtype=np.int64),
-                "table_cards": spaces.Box(low=-1, high=51, shape=(5,), dtype=np.int64),
-                "current_hand_rank": spaces.Discrete(7463, start=1),
-                "player_pots": spaces.Box(low=0, high=2**63 - 2, shape=(len(self.game.players),), dtype=np.int64),
-                "active_players": spaces.Box(low=0, high=1, shape=(len(self.game.players),), dtype=np.int64),
-                "round_contributions": spaces.Box(low=0, high=2**63 - 2, shape=(len(self.game.players),), dtype=np.int64),
-                "round_pot": spaces.Box(low=0, high=2**63 - 2, shape=(1,), dtype=np.int64),
-                "community_pot": spaces.Box(low=0, high=2**63 - 2, shape=(1,), dtype=np.int64),
-                "round": spaces.Discrete(len(Round)),
-                "legal_moves": spaces.Box(low=0, high=1, shape=(len(PlayerAction) - 2,), dtype=np.int64)
-            }
+        self.observation_space = spaces.Tuple(
+            (
+                spaces.Discrete(1, start=len(self.game.players)),  # number of players
+                spaces.Discrete(len(self.game.players), start=0),  # current player
+                spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player bankroll
+                spaces.Discrete(10),  # current hand rank
+                spaces.Discrete(len(Round)),  # current round
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # current player pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # round pot
+                # spaces.Discrete(len(self.game.players) * self.game.initial_bankroll // 10),  # community pot
+            )
         )
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):  # type: ignore
@@ -148,22 +134,39 @@ class TexasHoldemEnv(gym.Env):
         self.game.set_rng(self.np_random)
         self.game.reset()
         self._get_obs()
-        return (self.observation, {})
+        return (self.observation, self._get_info())
 
     def step(self, action: Optional[PlayerAction] = None):
+        self.reward = 0.0
         if action is None and self.game.current_player and self.game.current_player.autoplay:
             while self.game.current_player.autoplay and not self.game.done:
                 action = self.game.action(self.observation, self._get_info())
+                if action not in self.game.legal_moves:
+                    self.reward = -10.0
+                    continue
+                if action == PlayerAction.FOLD:
+                    self.reward = -5.0
                 self.game.do_step(action)
                 self._get_obs()
         else:
-            if action is not None:
+            if action is not None and self.game.current_player:
+                if action not in self.game.legal_moves:
+                    self.reward = -10.0
+                    log.warning(f"Action {action} is not a legal move!")
+                    return (self.observation, self.reward, self.game.done, False, self._get_info())
+                if action == PlayerAction.FOLD:
+                    self.reward = -5.0
                 self.game.do_step(action)
                 self._get_obs()
+                while self.game.current_player.autoplay and not self.game.done:
+                    action = self.game.action(self.observation, self._get_info())
+                    self.game.do_step(action)
+                    self._get_obs()
             else:
                 raise RuntimeError("Cannot step game with action None when a non-autoplay agent is playing!")
+        self._calc_reward()
         # Observation, reward, terminated, truncated, info
-        return (self.observation, 0, self.game.done, False, self._get_info())
+        return (self.observation, self.reward, self.game.done, False, self._get_info())
 
     def render(self):
         if self.render_mode in ["human", "rgb_array"]:
@@ -224,3 +227,10 @@ class TexasHoldemEnv(gym.Env):
 
     def _draw_card(self, card_index: int, canvas: pygame.Surface, position: pygame.Rect):
         canvas.blit(self.cards[card_index], position)
+
+    def _calc_reward(self):
+        if self.game.done:
+            if self.game.winner is not None and not self.game.players[self.game.winner].autoplay:
+                self.reward = self.game.initial_bankroll * len(self.game.players)
+            else:
+                self.reward = -(self.game.initial_bankroll * len(self.game.players))

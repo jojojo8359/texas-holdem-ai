@@ -17,4 +17,4 @@ class Player:
         log.debug(f"New Player {self.name} initialized")
 
     def action(self, action_space: list[PlayerAction], observation, info) -> PlayerAction:
-        return PlayerAction.CHECK
+        return PlayerAction.CHECK_CALL

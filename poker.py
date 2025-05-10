@@ -20,6 +20,7 @@ class PokerGame:
         self.players: list[Player] = []
 
         self.done: bool = False
+        self.winner: Optional[int] = None
         self.active_players: list[bool] = []
         self.current_player: Optional[Player] = None
         self.current_player_idx: int = 0
@@ -55,6 +56,7 @@ class PokerGame:
             player.round_contribution = 0
             player.cards = []
         self.done = False
+        self.winner = None
         self.start_new_hand()
 
     def generate_deck(self) -> None:
@@ -92,12 +94,20 @@ class PokerGame:
             raise RuntimeError(f"Cannot start a hand with {len(self.players)} players - must be between 2 and 8. Use add_player() to add a new player to the game.")
         if [player.bankroll for player in self.players].count(0) == len(self.players) - 1:
             self.done = True
-            log.info("Game over!")
+            self.winner = None
+            for index, bankroll in enumerate(player.bankroll for player in self.players):
+                if bankroll != 0:
+                    self.winner = index
+                    break
+            if self.winner is None:
+                logging.error("No winner found")
+            log.info(f"Game over! Player {self.winner} won")
             return
         log.info("Starting new hand...")
         self.round = Round.PREFLOP
         self.community_cards = []
         self.community_pot = 0
+        self.round_pot = 0
         # Set current player to the dealer - this way, starting preflop round will advance to the person after dealer (small blind)
         self.current_player_idx = self.dealer_idx
         self.current_player = self.players[self.current_player_idx]
@@ -241,11 +251,8 @@ class PokerGame:
         """Update the set of legal moves for the current player given the game's state."""
         self.legal_moves = []
         self.legal_moves.append(PlayerAction.FOLD)
-        if self.player_pots[self.current_player_idx] == max(self.player_pots):
-            self.legal_moves.append(PlayerAction.CHECK)
-        else:
-            if self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]:
-                self.legal_moves.append(PlayerAction.CALL)
+        if self.player_pots[self.current_player_idx] == max(self.player_pots) or (self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]):
+            self.legal_moves.append(PlayerAction.CHECK_CALL)
         if self.current_player:
             if self.current_player.bankroll > 0:
                 self.legal_moves.append(PlayerAction.RAISE)
@@ -281,12 +288,15 @@ class PokerGame:
             elif action == PlayerAction.FOLD:
                 self.deactivate_current_player()
                 log.info("Player folds")
-            elif action == PlayerAction.CALL:
-                contribution = min(self.min_call - self.player_pots[self.current_player_idx], self.current_player.bankroll)
-                log.info(f"Player calls ({self.min_call}): contribution = {contribution}")
-            elif action == PlayerAction.CHECK:
-                self.checkers += 1
-                log.info("Player checks: contribution = 0")
+            elif action == PlayerAction.CHECK_CALL:
+                if self.player_pots[self.current_player_idx] == max(self.player_pots):
+                    # CHECK
+                    self.checkers += 1
+                    log.info("Player checks: contribution = 0")
+                elif self.current_player and self.current_player.bankroll >= self.min_call - self.player_pots[self.current_player_idx]:
+                    # CALL
+                    contribution = min(self.min_call - self.player_pots[self.current_player_idx], self.current_player.bankroll)
+                    log.info(f"Player calls ({self.min_call}): contribution = {contribution}")
             elif action == PlayerAction.RAISE:
                 contribution = min((3 * self.big_blind) + self.min_call, self.current_player.bankroll)
                 log.info(f"Player raises (3BB={3*self.big_blind}): contribution = {contribution}")
