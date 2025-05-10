@@ -152,6 +152,7 @@ class TexasHoldemEnv(gym.Env):
             if action is not None and self.game.current_player:
                 if action not in self.game.legal_moves:
                     self.reward = -10.0
+                    log.warning(f"Action {action} is not a legal move!")
                     return (self.observation, self.reward, self.game.done, False, self._get_info())
                 if action == PlayerAction.FOLD:
                     self.reward = -5.0
